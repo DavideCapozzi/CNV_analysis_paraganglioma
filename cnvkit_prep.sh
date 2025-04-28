@@ -17,8 +17,11 @@ res_dir="/mnt/d/CNVkit/tumor/tumor_res"
 #8 MODEL SAMPLES
 base_dir="/mnt/d/CNVkit/model/WES_modelli"
 targets_dir="/mnt/d/CNVkit/model/model_targets"
-out_dir="/mnt/d/CNVkit/model/model_out"
-res_dir="/mnt/d/CNVkit/model/model_res"
+out_dir="/mnt/d/CNVkit/model/without_ref/model_out"
+res_dir="/mnt/d/CNVkit/model/without_ref/model_res"
+
+out_dir="/mnt/d/CNVkit/model/with_ref/model_out"
+res_dir="/mnt/d/CNVkit/model/with_ref/model_res"
 
 # Log files
 error_log="failed_files.log"
@@ -104,29 +107,42 @@ index_bam_files() {
 }
 
 
-# Function to check correspondence between VCF and BAM
+
+
 check_vcf_bam_correspondence() {
     local vcf_source="$1"
     local bam_base="$2"
     local orphan_vcf_report="$3"
+    local wes_modelli_base="/mnt/d/CNVkit/model/WES_modelli"  # Base path aggiunto
     
     echo "Checking correspondence between VCF and BAM..."
-    > "$orphan_vcf_report"  # Empty report
+    > "$orphan_vcf_report"  # Svuota il report
     
     find "$vcf_source" -type f -name "*hard-filtered.vcf.gz" | while read -r vcf_file; do
         sample_name=$(basename "$vcf_file" | awk -F'.' '{print $1}')
         
-        # Search for corresponding BAM using our new function
+        # 1. Controllo corrispondenza BAM
         bam_path=$(find_sample_files "$bam_base" "$sample_name" "bam")
         
         if [ -z "$bam_path" ]; then
             echo "VCF without BAM: $vcf_file" | tee -a "$orphan_vcf_report"
         fi
+
+        # 2. Copia VCF nella cartella corrispondente
+        base_sample=$(echo "$sample_name" | awk -F'-' '{print $1"-"$2}')  # Estrae PTJXXX-XXX
+        dest_dir=$(find "$wes_modelli_base" -maxdepth 1 -type d -name "${base_sample}*" -print -quit)
+        
+        if [ -n "$dest_dir" ]; then
+            echo "Copying VCF: $(basename "$vcf_file")"
+            echo "Destination directory: $dest_dir"
+            cp -v "$vcf_file" "$dest_dir/"  # Aggiunto verbose per verifica
+        else
+            echo "Warning: No destination folder found for $base_sample"
+        fi
     done
     
-    echo "Correspondence check completed."
+    echo "Correspondence check and VCF copy completed."
 }
-
 
 # Function to index VCF files
 index_vcf_files() {
@@ -153,6 +169,11 @@ prepare_reference_files() {
     local ref_dir="$1"
     
     echo "Preparing reference files..."
+    
+    if [ ! -f "${ref_dir}/refFlat.txt*"]; then 
+        wget http://hgdownload.soe.ucsc.edu/goldenPath/hg38/database/refFlat.txt.gz
+        gunzip refFlat.txt.gz
+    fi 
     
     # Download gap file
     if [ ! -f "${ref_dir}/ucsc-gaps-hg38.bed" ]; then
@@ -213,15 +234,17 @@ prepare_reference_files() {
     echo "Reference file preparation completed."
 }
 
-# Function to create BAM file list
+# Function to create BAM file list with custom name
 create_bam_list() {
     local base_dir="$1"
     local targets_dir="$2"
+    local name="${3:-*.bam}" #default value of name "*.bam"
     
     echo "Creating BAM file list..."
-    find "$base_dir" -name "*.bam" | grep -v "tmp" | grep -v "tmp2" > "${targets_dir}/bam_list.txt"
+    find "$base_dir" -name "$name" | grep -v "tmp" | grep -v "tmp2" > "${targets_dir}/bam_list.txt"
     echo "BAM list created: $output_file with $(wc -l < "${targets_dir}/bam_list.txt") files"
 }
+
 
 # Function to prepare accessibility target files and flat reference 
 prepare_targets_flatreference() {
@@ -260,20 +283,23 @@ prepare_targets_flatreference() {
 }
 
 # Function to create pooled reference
-# Not used (don't have normal samples)
 create_pooled_reference() {
     local ref_dir="$1"
+    local targets_dir="$2"
     
     echo "Creating pooled reference..."
     
-    if [ ! -f "${ref_dir}/pooled_reference.cnn" ]; then
+    if [ ! -f "${targets_dir}/pooled_reference.cnn" ]; then
         cnvkit.py batch \
             --method hybrid \
-            --targets "${ref_dir}/targets.bed" \
+            --targets "${targets_dir}/targets.bed" \
             --fasta "${ref_dir}/hg38.fa" \
-            --normal $(cat bam_list.txt) \
-            --output-reference "${ref_dir}/pooled_reference.cnn" \
-            --output-dir "${ref_dir}"
+            --access "${ref_dir}/access-hg38.bed" \
+            --normal $(cat "${targets_dir}/normal_bam_list.txt") \
+            --output-reference "${targets_dir}/pooled_reference.cnn" \
+            --output-dir "${targets_dir}" \
+            --annotate "${ref_dir}/refFlat.txt" \
+            --drop-low-coverage 
     fi
     
     echo "Pooled reference created."
@@ -297,6 +323,8 @@ fi
 # Phase 1: File preparation
 index_bam_files "$base_dir" "$error_log"
 check_vcf_bam_correspondence "$base_dir" "$base_dir" "$orphan_vcf_report"
+check_vcf_bam_correspondence "/mnt/d/CNVkit/model/PPGLs_model_WES-37315281/" "$base_dir" "$orph
+an_vcf_report" 
 index_vcf_files "$base_dir"
 create_bam_list "$base_dir" "$targets_dir"
 prepare_reference_files "$ref_dir"

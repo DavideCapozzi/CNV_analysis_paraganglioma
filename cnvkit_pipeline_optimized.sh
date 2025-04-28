@@ -17,8 +17,11 @@ res_dir="/mnt/d/CNVkit/tumor/tumor_res"
 #8 MODEL SAMPLES
 base_dir="/mnt/d/CNVkit/model/WES_modelli"
 targets_dir="/mnt/d/CNVkit/model/model_targets"
-out_dir="/mnt/d/CNVkit/model/model_out"
-res_dir="/mnt/d/CNVkit/model/model_res"
+out_dir="/mnt/d/CNVkit/model/without_ref/model_out"
+res_dir="/mnt/d/CNVkit/model/without_ref/model_res"
+
+out_dir="/mnt/d/CNVkit/model/with_ref/model_out"
+res_dir="/mnt/d/CNVkit/model/with_ref/model_res"
 
 # Log files
 error_log="failed_files.log"
@@ -80,6 +83,7 @@ process_bam() {
     local out_dir="$4"
     
     sample_name=$(basename "$file" .bam)
+    normal=${file/tum-001/blood}
     sample_out="${out_dir}/${sample_name}"
     
     # Skip if output directory already exists
@@ -89,13 +93,21 @@ process_bam() {
         
         # Run CNVkit batch with flat reference
         echo "Launching batch command for ${file}"
-        cnvkit.py batch "$file" -r "${targets_dir}/flat_reference.cnn" \
+        cnvkit.py batch "$file" -n "$normal" \
             --output-reference "${sample_out}/${sample_name}.cnn" \
             --output-dir "$sample_out" \
+            --fasta "${ref_dir}/hg38.fa" \
+            --targets "${targets_dir}/targets.bed" \
+            --antitargets "${targets_dir}/antitargets.bed" \
+            --annotate "${ref_dir}/refFlat.txt" \
             -p $(nproc) \
             --drop-low-coverage \
             --scatter 
-            
+
+        ##WHEN TO USE TARGETS/ANTI AND WHEN NOT???? -r no -n yes WHYYY
+        #Without normal
+        #cnvkit.py batch "$file" -r "${targets_dir}/flat_reference.cnn" \
+        #Previous runs    
         #--annotate "${ref_dir}/repeats.bed" \ ##Where is repeats.bed coming from? 
         #--short-names \ 
         #--fasta "${ref_dir}/hg38.fa" \ 
@@ -118,7 +130,8 @@ analyze_sample_results() {
     local sample_name="$1"
     local sample_dir="$2"
     local sample_res="$3"
-    local vcf_missing_log="$4"
+    local analysis_type="$4"
+    local vcf_missing_log="$5"
 
     # Skip if results directory already exists
     if [ ! -d "$sample_res" ]; then
@@ -136,10 +149,19 @@ analyze_sample_results() {
                 cnvkit.py breaks "$cnr_file" "$cns_file" --min-probes 5 > "$sample_res/${sample_name}_breaks.txt"
             fi
             
+            #Use correct vcf path depending on analysis 
+            if [ "$analysis_type"="model"]; then
+                sample_prefix=$(basename "$sample_dir" | awk -F'-' '{print $1}')
+                vcf_path=$(find "${base_dir}" -type f \( -path "*${sample_prefix}*tum.hard-filtered.vcf*" \) -print -quit)
+            elif [ "$analysis_type"="tumor"]; then
+                vcf_path=$(find "${base_dir}" -type f \( -path "*${sample_name}.hard-filtered.vcf*" \) -print -quit)
+            else 
+                echo "analysis_type not recognized, please select model or tumor." 
+            fi 
+
             # Call CNVs using VCF (if available)
-            vcf_path=$(find "/mnt/d/CNVkit/PTJ_WES_IDT-30802789" -type f \( -path "*${sample_name}.hard-filtered.vcf*" \) -print -quit)
             if [ -f "$vcf_path" ]; then
-                cnvkit.py call "$cns_file" --vcf "$vcf_path" --thresholds=-0.7,0.7 --ploidy 2 --drop-low-coverage -o "$sample_res/${sample_name}_call.cns"
+                cnvkit.py call "$cns_file" --vcf "$vcf_path" --thresholds=-0.7,0.7 --ploidy 2 --purity 0.7 --drop-low-coverage -o "$sample_res/${sample_name}_call.cns"
             else
                 echo "VCF not found for $sample_name. Skipping call command."
                 echo "$sample_name" >> "$vcf_missing_log"
@@ -168,7 +190,7 @@ generate_multi_sample_heatmap() {
     mkdir -p "${res_dir}/multi_sample"
     
     # Find all .cns files (batch output)
-    find "$out_dir" -name "*.cns" ! -name "*call*" ! -name "*bintest*" > "${res_dir}/multi_sample/all_cns_files.txt"
+    #find "$out_dir" -name "*.cns" ! -name "*call*" ! -name "*bintest*" > "${res_dir}/multi_sample/all_cns_files.txt"
     
     # Generate heatmap for all samples from batch output
     if [ -s "${res_dir}/multi_sample/all_cns_files.txt" ]; then
@@ -178,7 +200,7 @@ generate_multi_sample_heatmap() {
         
         # Generate heatmaps for chromosomes relevant to paraganglioma
         # These chromosomes are verified to be compatible with hg38
-        for chr in chr1 chr3 chr11 chr17 chr22; do
+        for chr in chr1 chr3 chr4 chr11 chr17 chr22; do
             echo "Generating heatmap for chromosome $chr..."
             cnvkit.py heatmap $(cat "${res_dir}/multi_sample/all_cns_files.txt") -d \
                 --chromosome $chr \
@@ -199,7 +221,7 @@ echo "Number of available cores: $num_cores"
 
 # Phase 2: BAM processing
 echo "=== PROCESSING BAM FILES ==="
-find "$base_dir" -type f -name "*.bam" ! -name "tmp*.bam" | while read file; do
+find "$base_dir" -type f -name "*tum-001.bam" ! -name "tmp*.bam" | while read file; do
     process_bam "$file" "$ref_dir" "$targets_dir" "$out_dir"
 done
 
@@ -213,9 +235,9 @@ for sample_dir in "$out_dir"/*; do
     sample_name=$(basename "$sample_dir")
     sample_res="$res_dir/$sample_name"
     sample_list+=("$sample_name")
-    
-    analyze_sample_results "$sample_name" "$sample_dir" "$sample_res" "$vcf_missing_log" 
+    #analyze_sample_results "$sample_name" "$sample_dir" "$sample_res" "model" "$vcf_missing_log" 
 done
+
 
 # Phase 4: Multi-sample heatmap generation
 echo "=== GENERATING MULTI-SAMPLE HEATMAP ==="
