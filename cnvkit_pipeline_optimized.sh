@@ -150,10 +150,10 @@ analyze_sample_results() {
             fi
             
             #Use correct vcf path depending on analysis 
-            if [ "$analysis_type"="model"]; then
+            if [ "$analysis_type"="model" ]; then
                 sample_prefix=$(basename "$sample_dir" | awk -F'-' '{print $1}')
                 vcf_path=$(find "${base_dir}" -type f \( -path "*${sample_prefix}*tum.hard-filtered.vcf*" \) -print -quit)
-            elif [ "$analysis_type"="tumor"]; then
+            elif [ "$analysis_type"="tumor" ]; then
                 vcf_path=$(find "${base_dir}" -type f \( -path "*${sample_name}.hard-filtered.vcf*" \) -print -quit)
             else 
                 echo "analysis_type not recognized, please select model or tumor." 
@@ -235,7 +235,7 @@ for sample_dir in "$out_dir"/*; do
     sample_name=$(basename "$sample_dir")
     sample_res="$res_dir/$sample_name"
     sample_list+=("$sample_name")
-    #analyze_sample_results "$sample_name" "$sample_dir" "$sample_res" "model" "$vcf_missing_log" 
+    analyze_sample_results "$sample_name" "$sample_dir" "$sample_res" "model" "$vcf_missing_log" 
 done
 
 
