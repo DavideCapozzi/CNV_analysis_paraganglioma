@@ -12,8 +12,8 @@ library(dendextend)
 # ---- Centralized Configuration ----
 config <- list(
   dirs = list(
-    res = "D:/CNVkit/tumor/tumor_res/",
-    out = "D:/CNVkit/tumor/tumor_imgs/"
+    res = "D:/CNVkit/model/with_ref/model_res/",
+    out = "D:/CNVkit/model/with_ref/model_imgs/"
   )
 )
 
@@ -200,7 +200,7 @@ plot_cnv_pheatmap <- function(cnv_matrix) {
     cluster_rows = FALSE,  # Don't cluster chromosomes (rows)
     show_rownames = TRUE,  # Show chromosome names
     show_colnames = TRUE,  # Show sample names
-    cutree_cols = 4,
+    #cutree_cols = 2,       # Separate heatmap 
     fontsize_row = 10,     # Font size for chromosomes
     fontsize_col = 8,      # Font size for samples
     main = "CNV profiles in tumor Samples"
@@ -239,7 +239,7 @@ main <- function() {
   message("Removing singleton outliers (one at a time per branch)...")
   cnv_matrix_filtered <- remove_singletons_from_dendrogram(
     cnv_matrix,
-    n = 2,
+    n = 0,
     distance = "manhattan"
   )
   

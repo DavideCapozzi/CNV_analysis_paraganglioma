@@ -23,6 +23,9 @@ res_dir="/mnt/d/CNVkit/model/without_ref/model_res"
 out_dir="/mnt/d/CNVkit/model/with_ref/model_out"
 res_dir="/mnt/d/CNVkit/model/with_ref/model_res"
 
+# BLOOD CHECK 
+out_dir="/mnt/d/CNVkit/model/blood_check/model_out"
+
 # Log files
 error_log="failed_files.log"
 orphan_vcf_report="orphan_vcfs.txt"
@@ -83,7 +86,7 @@ process_bam() {
     local out_dir="$4"
     
     sample_name=$(basename "$file" .bam)
-    normal=${file/tum-001/blood}
+    #normal=${file/tum-001/blood}
     sample_out="${out_dir}/${sample_name}"
     
     # Skip if output directory already exists
@@ -93,35 +96,33 @@ process_bam() {
         
         # Run CNVkit batch with flat reference
         echo "Launching batch command for ${file}"
-        cnvkit.py batch "$file" -n "$normal" \
+            cnvkit.py batch "$file" -r "${targets_dir}/flat_reference.cnn" \
             --output-reference "${sample_out}/${sample_name}.cnn" \
             --output-dir "$sample_out" \
-            --fasta "${ref_dir}/hg38.fa" \
-            --targets "${targets_dir}/targets.bed" \
-            --antitargets "${targets_dir}/antitargets.bed" \
-            --annotate "${ref_dir}/refFlat.txt" \
             -p $(nproc) \
             --drop-low-coverage \
             --scatter 
 
-        ##WHEN TO USE TARGETS/ANTI AND WHEN NOT???? -r no -n yes WHYYY
-        #Without normal
-        #cnvkit.py batch "$file" -r "${targets_dir}/flat_reference.cnn" \
-        #Previous runs    
-        #--annotate "${ref_dir}/repeats.bed" \ ##Where is repeats.bed coming from? 
-        #--short-names \ 
-        #--fasta "${ref_dir}/hg38.fa" \ 
+        #With normal
+        #cnvkit.py batch "$file" -n "$normal" \
+        #
+        #--fasta "${ref_dir}/hg38.fa" \
         #--targets "${targets_dir}/targets.bed" \
         #--antitargets "${targets_dir}/antitargets.bed" \
+        #--annotate "${ref_dir}/refFlat.txt" \
+
         echo "Success: wrote ${sample_out}/${sample_name}.cnn"
         
         # Add genemetrics after batch
-        cnr_file=$(find_sample_files "$sample_out" "$sample_name" "cnr")
-        if [ -f "$cnr_file" ]; then
-            echo "Running genemetrics for ${sample_name}"
-            cnvkit.py genemetrics "$cnr_file" -o "${sample_out}/${sample_name}.genemetrics.txt"
-            echo "Genemetrics completed for ${sample_name}"
-        fi
+        # cnr_file=$(find_sample_files "$sample_out" "$sample_name" "cnr")
+        # if [ -f "$cnr_file" ]; then
+        #     echo "Running genemetrics for ${sample_name}"
+        #     cnvkit.py genemetrics "$cnr_file" -o "${sample_out}/${sample_name}.genemetrics.txt"
+        #     echo "Genemetrics completed for ${sample_name}"
+        # fi
+
+        
+        echo "Completed analysis for ${sample_name}"
     fi
 }
 
@@ -221,7 +222,8 @@ echo "Number of available cores: $num_cores"
 
 # Phase 2: BAM processing
 echo "=== PROCESSING BAM FILES ==="
-find "$base_dir" -type f -name "*tum-001.bam" ! -name "tmp*.bam" | while read file; do
+#find "$base_dir" -type f -name "*tum-001.bam" ! -name "tmp*.bam" | while read file; do
+find "$base_dir" -type f -name "*blood.bam" ! -name "tmp*.bam" | while read file; do
     process_bam "$file" "$ref_dir" "$targets_dir" "$out_dir"
 done
 
@@ -242,6 +244,19 @@ done
 # Phase 4: Multi-sample heatmap generation
 echo "=== GENERATING MULTI-SAMPLE HEATMAP ==="
 generate_multi_sample_heatmap "$out_dir" "$res_dir"
+
+#############################################################################################################
+# Esegui il 'call' anche per i campioni di sangue per vedere i copy number assoluti stimati
+# (assumendo ploidia 2 e purezza 1.0 per un "normale ideale")
+for sample_dir in "$out_dir"/*; do
+    sample_name=$(basename "$sample_dir")
+    cns_file=$(find_sample_files "$sample_dir" "$sample_name" "cns")
+    if [ -f "$cns_file" ]; then
+        cnvkit.py call "$cns_file" --ploidy 2 --purity 1.0 -o "${out_dir}/${sample_name}_flat_ref.call.cns"
+    else 
+        echo "cns not found for $sample_name" 
+    fi
+done
 
 
 
