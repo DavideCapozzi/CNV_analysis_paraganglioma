@@ -282,27 +282,62 @@ prepare_targets_flatreference() {
     echo "Flat reference created" ##Echoes not always accurate
 }
 
-# Function to create pooled reference
-create_pooled_reference() {
+generate_coverage() {
+    local targets_dir="$1"
+
+    echo "Generating target/antitarget coverage for normal BAMs..."
+
+    mkdir -p "${targets_dir}/coverage"
+
+    while read -r bam; do
+        sample_name=$(basename "$bam" .bam)
+        target_cnn="${targets_dir}/coverage/${sample_name}.targetcoverage.cnn"
+        antitarget_cnn="${targets_dir}/coverage/${sample_name}.antitargetcoverage.cnn"
+
+        if [ -f "$target_cnn" ] && [ -f "$antitarget_cnn" ]; then
+            echo "Coverage files already exist for $sample_name. Skipping..."
+            continue
+        fi
+
+        echo "Processing coverage for $sample_name..."
+
+        if [ ! -f "$target_cnn" ]; then
+            cnvkit.py coverage "$bam" "${targets_dir}/targets.bed" -o "$target_cnn"
+        fi
+
+        if [ ! -f "$antitarget_cnn" ]; then
+            cnvkit.py coverage "$bam" "${targets_dir}/antitargets.bed" -o "$antitarget_cnn"
+        fi
+
+    done < "${targets_dir}/normal_bam_list.txt"
+
+    echo "Coverage file generation completed."
+}
+
+create_pooled_reference_from_cnn() {
     local ref_dir="$1"
     local targets_dir="$2"
-    
-    echo "Creating pooled reference..."
-    
-    if [ ! -f "${targets_dir}/pooled_reference.cnn" ]; then
-        cnvkit.py batch \
-            --method hybrid \
-            --targets "${targets_dir}/targets.bed" \
+
+    echo "Creating pooled reference from coverage CNNs..."
+
+    if [ ! -f "${targets_dir}/blood_pooled_reference.cnn" ]; then
+
+        target_cnns=$(ls "${targets_dir}/coverage/"*.targetcoverage.cnn)
+        antitarget_cnns=$(ls "${targets_dir}/coverage/"*.antitargetcoverage.cnn)
+
+        cnvkit.py reference $target_cnns $antitarget_cnns \
             --fasta "${ref_dir}/hg38.fa" \
-            --access "${ref_dir}/access-hg38.bed" \
-            --normal $(cat "${targets_dir}/normal_bam_list.txt") \
-            --output-reference "${targets_dir}/pooled_reference.cnn" \
-            --output-dir "${targets_dir}" \
-            --annotate "${ref_dir}/refFlat.txt" \
-            --drop-low-coverage 
+            --targets "${targets_dir}/targets.bed" \
+            --antitargets "${targets_dir}/antitargets.bed" \
+            --output "${targets_dir}/blood_pooled_reference.cnn" \
+            --cluster \
+            --no-edge
+
+        echo "Pooled reference created at ${targets_dir}/blood_pooled_reference.cnn"
+
+    else
+        echo "Reference already exists. Skipping creation."
     fi
-    
-    echo "Pooled reference created."
 }
 
 # =====================================================================
@@ -329,7 +364,9 @@ index_vcf_files "$base_dir"
 create_bam_list "$base_dir" "$targets_dir"
 prepare_reference_files "$ref_dir"
 prepare_targets_flatreference "$ref_dir" "$targets_dir" "hg38_exome_comp_spikein_v2.0.2_targets_sorted.re_annotated.bed" #"xgen-exome-hyb-panel-v2-probes-hg38.bed"
-create_pooled_reference "$ref_dir"
+
+generate_coverage "$targets_dir"
+create_pooled_reference "$ref_dir" "$targets_dir"
 
 # =====================================================================
 # SigProfiler GenerateMatrix
