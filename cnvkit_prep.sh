@@ -314,7 +314,7 @@ generate_coverage() {
     echo "Coverage file generation completed."
 }
 
-create_pooled_reference_from_cnn() {
+create_pooled_reference() {
     local ref_dir="$1"
     local targets_dir="$2"
 
@@ -327,8 +327,6 @@ create_pooled_reference_from_cnn() {
 
         cnvkit.py reference $target_cnns $antitarget_cnns \
             --fasta "${ref_dir}/hg38.fa" \
-            --targets "${targets_dir}/targets.bed" \
-            --antitargets "${targets_dir}/antitargets.bed" \
             --output "${targets_dir}/blood_pooled_reference.cnn" \
             --cluster \
             --no-edge

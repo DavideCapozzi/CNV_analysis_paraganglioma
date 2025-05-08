@@ -23,6 +23,12 @@ res_dir="/mnt/d/CNVkit/model/without_ref/model_res"
 out_dir="/mnt/d/CNVkit/model/with_ref/model_out"
 res_dir="/mnt/d/CNVkit/model/with_ref/model_res"
 
+#POOLED REF 
+out_dir="/mnt/d/CNVkit/model/with_pooledref/model_out"
+res_dir="/mnt/d/CNVkit/model/with_pooledref/model_res"
+out_dir="/mnt/d/CNVkit/model/with_pooledref_nodrop/model_out"
+res_dir="/mnt/d/CNVkit/model/with_pooledref_nodrop/model_res"
+
 # BLOOD CHECK 
 out_dir="/mnt/d/CNVkit/model/blood_check/model_out"
 
@@ -94,16 +100,26 @@ process_bam() {
         echo "Creating directory ${sample_out}"
         mkdir -p "$sample_out"
         
-        # Run CNVkit batch with flat reference
+        #Run CNVkit batch with pooled reference
         echo "Launching batch command for ${file}"
-            cnvkit.py batch "$file" -r "${targets_dir}/flat_reference.cnn" \
-            --output-reference "${sample_out}/${sample_name}.cnn" \
+            cnvkit.py batch "$file" \
+            -r "${targets_dir}/blood_pooled_reference.cnn" \
             --output-dir "$sample_out" \
+            --method hybrid \
             -p $(nproc) \
-            --drop-low-coverage \
             --scatter 
 
-        #With normal
+
+        #Run CNVkit batch with flat reference
+        # echo "Launching batch command for ${file}"
+        #     cnvkit.py batch "$file" -r "${targets_dir}/flat_reference.cnn" \
+        #     --output-reference "${sample_out}/${sample_name}.cnn" \
+        #     --output-dir "$sample_out" \
+        #     -p $(nproc) \
+        #     --drop-low-coverage \
+        #     --scatter 
+
+        #Run CNVkit batch with normal
         #cnvkit.py batch "$file" -n "$normal" \
         #
         #--fasta "${ref_dir}/hg38.fa" \
@@ -113,15 +129,14 @@ process_bam() {
 
         echo "Success: wrote ${sample_out}/${sample_name}.cnn"
         
-        # Add genemetrics after batch
-        # cnr_file=$(find_sample_files "$sample_out" "$sample_name" "cnr")
-        # if [ -f "$cnr_file" ]; then
-        #     echo "Running genemetrics for ${sample_name}"
-        #     cnvkit.py genemetrics "$cnr_file" -o "${sample_out}/${sample_name}.genemetrics.txt"
-        #     echo "Genemetrics completed for ${sample_name}"
-        # fi
+        #Add genemetrics after batch
+        cnr_file=$(find_sample_files "$sample_out" "$sample_name" "cnr")
+        if [ -f "$cnr_file" ]; then
+            echo "Running genemetrics for ${sample_name}"
+            cnvkit.py genemetrics "$cnr_file" -o "${sample_out}/${sample_name}.genemetrics.txt"
+            echo "Genemetrics completed for ${sample_name}"
+        fi
 
-        
         echo "Completed analysis for ${sample_name}"
     fi
 }
@@ -207,6 +222,8 @@ generate_multi_sample_heatmap() {
                 --chromosome $chr \
                 -o "${res_dir}/multi_sample/all_samples_${chr}_heatmap.pdf"
         done
+    else 
+        echo "all_cns_files.txt not present in ${res_dir}/multi_sample/"
     fi
     
     echo "Multi-sample heatmap generation completed."
@@ -222,8 +239,8 @@ echo "Number of available cores: $num_cores"
 
 # Phase 2: BAM processing
 echo "=== PROCESSING BAM FILES ==="
-#find "$base_dir" -type f -name "*tum-001.bam" ! -name "tmp*.bam" | while read file; do
-find "$base_dir" -type f -name "*blood.bam" ! -name "tmp*.bam" | while read file; do
+find "$base_dir" -type f -name "*tum-001.bam" ! -name "tmp*.bam" | while read file; do
+#find "$base_dir" -type f -name "*blood.bam" ! -name "tmp*.bam" | while read file; do
     process_bam "$file" "$ref_dir" "$targets_dir" "$out_dir"
 done
 
