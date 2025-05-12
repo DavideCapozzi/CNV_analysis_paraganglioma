@@ -246,23 +246,24 @@ create_bam_list() {
 }
 
 
-# Function to prepare accessibility target files and flat reference 
 prepare_targets_flatreference() {
     local ref_dir="$1"
     local targets_dir="$2"
     local panel_file="$3"
 
-    
     echo "Preparing accessibility and target files..."
     
-    # Create base accessibility file
+    # Modifica critica 1: Usa SOLO campioni normali per autobin
+    normal_bams="${targets_dir}/bam_list.txt"  # File specifico per normali
+    
+    # Genera file access escludendo regioni non sequenziabili
     if [ ! -f "${ref_dir}/access-hg38.bed" ]; then
         cnvkit.py access "${ref_dir}/hg38.fa" -x "${ref_dir}/ucsc-gaps-hg38.bed" -o "${ref_dir}/access-hg38.bed"
     fi
     
-    # Divide accessibility file into bins
+    # Modifica critica 2: Usa esplicitamente i normali per autobin
     if [ ! -f "${targets_dir}/targets.bed" ] || [ ! -f "${targets_dir}/antitargets.bed" ]; then
-        cnvkit.py autobin $(cat "${targets_dir}/bam_list.txt") \
+        cnvkit.py autobin $(cat "$normal_bams") \
           --targets "${targets_dir}/${panel_file}" \
           --access "${ref_dir}/access-hg38.bed" \
           --target-min-size 100 \
@@ -272,21 +273,22 @@ prepare_targets_flatreference() {
           --antitarget-output-bed "${targets_dir}/antitargets.bed"
     fi
     
-    echo "Accessibility and target file preparation completed." ##Echoes not always accurate
-    echo "Creating flat reference"
+    # Modifica critica 3: Verifica manuale degli antitargets
+    if [ $(wc -l < "${targets_dir}/antitargets.bed") -lt 1000 ]; then
+        echo "ERROR: Antitargets malformati. Rigenerare con:"
+        echo "cnvkit.py antitarget ${targets_dir}/targets.bed -g ${ref_dir}/access-hg38.bed -o ${targets_dir}/antitargets.bed"
+        exit 1
+    fi
     
-    if [ ! -f "${ref_dir}/flat_reference.cnn" ]; then 
-        cnvkit.py reference -f "${ref_dir}/hg38.fa" -t "${targets_dir}/targets.bed" -a "${targets_dir}/antitargets.bed" -o "${targets_dir}/flat_reference.cnn"
-    fi 
-
-    echo "Flat reference created" ##Echoes not always accurate
+    #echo "Creazione flat reference..."
+    #cnvkit.py reference -f "${ref_dir}/hg38.fa" -t "${targets_dir}/targets.bed" -a "${targets_dir}/antitargets.bed" -o "${targets_dir}/flat_reference.cnn"
 }
 
 generate_coverage() {
-    local targets_dir="$1"
+    local ref_dir="$1"
+    local targets_dir="$2"
 
     echo "Generating target/antitarget coverage for normal BAMs..."
-
     mkdir -p "${targets_dir}/coverage"
 
     while read -r bam; do
@@ -295,21 +297,23 @@ generate_coverage() {
         antitarget_cnn="${targets_dir}/coverage/${sample_name}.antitargetcoverage.cnn"
 
         if [ -f "$target_cnn" ] && [ -f "$antitarget_cnn" ]; then
-            echo "Coverage files already exist for $sample_name. Skipping..."
+            echo "Coverage files exist for $sample_name. Skipping..."
             continue
         fi
 
         echo "Processing coverage for $sample_name..."
 
         if [ ! -f "$target_cnn" ]; then
-            cnvkit.py coverage "$bam" "${targets_dir}/targets.bed" -o "$target_cnn"
+            cnvkit.py coverage "$bam" "${targets_dir}/targets.bed" \
+                -o "$target_cnn"
         fi
 
         if [ ! -f "$antitarget_cnn" ]; then
-            cnvkit.py coverage "$bam" "${targets_dir}/antitargets.bed" -o "$antitarget_cnn"
+            cnvkit.py coverage "$bam" "${targets_dir}/antitargets.bed" \
+                -o "$antitarget_cnn"
         fi
 
-    done < "${targets_dir}/normal_bam_list.txt"
+    done < "${targets_dir}/bam_list.txt"
 
     echo "Coverage file generation completed."
 }
@@ -318,24 +322,41 @@ create_pooled_reference() {
     local ref_dir="$1"
     local targets_dir="$2"
 
-    echo "Creating pooled reference from coverage CNNs..."
+    target_cnns=($(ls "${targets_dir}/coverage/"*.targetcoverage.cnn))
+    antitarget_cnns=($(ls "${targets_dir}/coverage/"*.antitargetcoverage.cnn))
 
-    if [ ! -f "${targets_dir}/blood_pooled_reference.cnn" ]; then
+    # CORREZIONE CHIAVE: Rimuovi --method hybrid (non esiste in reference)
+    cnvkit.py reference \
+        "${target_cnns[@]}" "${antitarget_cnns[@]}" \
+        -f "${ref_dir}/hg38.fa" \
+        -o "${targets_dir}/blood_pooled_reference.cnn"
 
-        target_cnns=$(ls "${targets_dir}/coverage/"*.targetcoverage.cnn)
-        antitarget_cnns=$(ls "${targets_dir}/coverage/"*.antitargetcoverage.cnn)
+    # Verifica manuale della reference (sostituisce --view)
+    echo "Validazione reference:"
+    awk 'NR > 1 {print $5}' "${targets_dir}/blood_pooled_reference.cnn" | sort -n | uniq -c
+}
 
-        cnvkit.py reference $target_cnns $antitarget_cnns \
-            --fasta "${ref_dir}/hg38.fa" \
-            --output "${targets_dir}/blood_pooled_reference.cnn" \
-            --cluster \
-            --no-edge
+#Sort alignment, mark and remove duplicates, index output files 
+remove_PCR_duplicates() {
+    local alignment="$1" 
 
-        echo "Pooled reference created at ${targets_dir}/blood_pooled_reference.cnn"
+    echo "Processing file: $alignment"
+    base_name=${alignment%.bam}
 
-    else
-        echo "Reference already exists. Skipping creation."
-    fi
+    #echo "Sorting BAM file before marking duplicates..."
+    #samtools sort "$alignment" -o "${base_name}_sorted.bam"
+
+    echo "Running picard MarkDuplicates..."
+    picard MarkDuplicates \
+        -I "$alignment" \
+        -O ${base_name}_marked_duplicates.bam \
+        -M ${base_name}_marked_dup_metrics.txt \
+        -VALIDATION_STRINGENCY LENIENT \
+        --REMOVE_DUPLICATES true
+
+    echo "Indexing BAM file..."
+    samtools index "${base_name}_marked_duplicates.bam"
+    
 }
 
 # =====================================================================
@@ -359,11 +380,20 @@ check_vcf_bam_correspondence "$base_dir" "$base_dir" "$orphan_vcf_report"
 check_vcf_bam_correspondence "/mnt/d/CNVkit/model/PPGLs_model_WES-37315281/" "$base_dir" "$orph
 an_vcf_report" 
 index_vcf_files "$base_dir"
-create_bam_list "$base_dir" "$targets_dir"
-prepare_reference_files "$ref_dir"
-prepare_targets_flatreference "$ref_dir" "$targets_dir" "hg38_exome_comp_spikein_v2.0.2_targets_sorted.re_annotated.bed" #"xgen-exome-hyb-panel-v2-probes-hg38.bed"
 
-generate_coverage "$targets_dir"
+create_bam_list "$base_dir" "$targets_dir" 
+prepare_reference_files "$ref_dir"
+
+# Phase 1: removing duplicates 
+echo "=== Removing picard duplicates ==="
+find "$base_dir" -type f -name "*PGL214-363-blood.bam" ! -name "tmp*.bam" | while read file; do
+    remove_PCR_duplicates "$file" 
+done
+
+create_bam_list "$base_dir" "$targets_dir" "*blood_marked_duplicates.bam"
+
+prepare_targets_flatreference "$ref_dir" "$targets_dir" "hg38_exome_comp_spikein_v2.0.2_targets_sorted.re_annotated.bed" #"xgen-exome-hyb-panel-v2-probes-hg38.bed"
+generate_coverage "$ref_dir" "$targets_dir"
 create_pooled_reference "$ref_dir" "$targets_dir"
 
 # =====================================================================

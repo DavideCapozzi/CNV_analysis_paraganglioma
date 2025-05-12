@@ -12,8 +12,8 @@ library(dendextend)
 # ---- Centralized Configuration ----
 config <- list(
   dirs = list(
-    res = "D:/CNVkit/model/with_ref/model_res/",
-    out = "D:/CNVkit/model/with_ref/model_imgs/"
+    res = "D:/CNVkit/model/with_pooledref/model_res/",
+    out = "D:/CNVkit/model/with_pooledref/model_imgs/"
   )
 )
 
