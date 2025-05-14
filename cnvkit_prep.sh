@@ -241,8 +241,8 @@ create_bam_list() {
     local name="${3:-*.bam}" #default value of name "*.bam"
     
     echo "Creating BAM file list..."
-    find "$base_dir" -name "$name" | grep -v "tmp" | grep -v "tmp2" > "${targets_dir}/bam_list.txt"
-    echo "BAM list created: $output_file with $(wc -l < "${targets_dir}/bam_list.txt") files"
+    find "$base_dir" -name "$name" | grep -v "tmp" | grep -v "tmp2" > "${targets_dir}/normal_bam_list.txt"
+    echo "BAM list created: $output_file with $(wc -l < "${targets_dir}/normal_bam_list.txt") files"
 }
 
 
@@ -254,7 +254,7 @@ prepare_targets_flatreference() {
     echo "Preparing accessibility and target files..."
     
     # Modifica critica 1: Usa SOLO campioni normali per autobin
-    normal_bams="${targets_dir}/bam_list.txt"  # File specifico per normali
+    normal_bams="${targets_dir}/normal_bam_list.txt"  # File specifico per normali
     
     # Genera file access escludendo regioni non sequenziabili
     if [ ! -f "${ref_dir}/access-hg38.bed" ]; then
@@ -266,9 +266,10 @@ prepare_targets_flatreference() {
         cnvkit.py autobin $(cat "$normal_bams") \
           --targets "${targets_dir}/${panel_file}" \
           --access "${ref_dir}/access-hg38.bed" \
-          --target-min-size 100 \
-          --target-max-size 500 \
-          --antitarget-max-size 5000 \
+          --target-min-size 200 \
+          --target-max-size 1000 \
+          --antitarget-max-size 2000 \
+          --method hybrid \
           --target-output-bed "${targets_dir}/targets.bed" \
           --antitarget-output-bed "${targets_dir}/antitargets.bed"
     fi
@@ -305,12 +306,12 @@ generate_coverage() {
 
         if [ ! -f "$target_cnn" ]; then
             cnvkit.py coverage "$bam" "${targets_dir}/targets.bed" \
-                -o "$target_cnn"
+                -o "$target_cnn" 
         fi
 
         if [ ! -f "$antitarget_cnn" ]; then
             cnvkit.py coverage "$bam" "${targets_dir}/antitargets.bed" \
-                -o "$antitarget_cnn"
+                -o "$antitarget_cnn" 
         fi
 
     done < "${targets_dir}/bam_list.txt"
@@ -390,7 +391,7 @@ find "$base_dir" -type f -name "*PGL214-363-blood.bam" ! -name "tmp*.bam" | whil
     remove_PCR_duplicates "$file" 
 done
 
-create_bam_list "$base_dir" "$targets_dir" "*blood_marked_duplicates.bam"
+create_bam_list "$base_dir" "$targets_dir" "*blood.bam"
 
 prepare_targets_flatreference "$ref_dir" "$targets_dir" "hg38_exome_comp_spikein_v2.0.2_targets_sorted.re_annotated.bed" #"xgen-exome-hyb-panel-v2-probes-hg38.bed"
 generate_coverage "$ref_dir" "$targets_dir"

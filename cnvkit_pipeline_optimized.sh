@@ -177,11 +177,11 @@ analyze_sample_results() {
 
             # Call CNVs using VCF (if available)
             if [ -f "$vcf_path" ]; then
-                cnvkit.py call "$cns_file" --vcf "$vcf_path" --thresholds=-0.7,0.7 --ploidy 2 --purity 0.7 --drop-low-coverage -o "$sample_res/${sample_name}_call.cns"
+                cnvkit.py call "$cns_file" --vcf "$vcf_path" --drop-low-coverage -o "$sample_res/${sample_name}_call.cns"
             else
                 echo "VCF not found for $sample_name. Skipping call command."
                 echo "$sample_name" >> "$vcf_missing_log"
-                cnvkit.py call "$cns_file" --thresholds=-0.7,0.7 --ploidy 2 --drop-low-coverage -o "$sample_res/${sample_name}_call.cns"
+                cnvkit.py call "$cns_file" -o "$sample_res/${sample_name}_call.cns"
             fi
             
             # Run genemetrics on cns file
