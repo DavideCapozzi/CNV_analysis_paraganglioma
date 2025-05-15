@@ -15,8 +15,17 @@ out_dir="/mnt/d/CNVkit/tumor/tumor_out"
 res_dir="/mnt/d/CNVkit/tumor/tumor_res"
 
 #8 MODEL SAMPLES
-base_dir="/mnt/d/CNVkit/model/WES_modelli"
-targets_dir="/mnt/d/CNVkit/model/model_targets"
+def_model_dir_pooledref() {
+    in_dir="/mnt/d/CNVkit"
+    ref_dir="/mnt/d/CNVkit/ref"
+    base_dir="/mnt/d/CNVkit/model/WES_modelli"
+    targets_dir="/mnt/d/CNVkit/model/model_targets"
+    out_dir="/mnt/d/CNVkit/model/with_pooledref/model_out"
+    res_dir="/mnt/d/CNVkit/model/with_pooledref/model_res"
+}
+
+def_model_dir
+
 out_dir="/mnt/d/CNVkit/model/without_ref/model_out"
 res_dir="/mnt/d/CNVkit/model/without_ref/model_res"
 
@@ -24,13 +33,10 @@ out_dir="/mnt/d/CNVkit/model/with_ref/model_out"
 res_dir="/mnt/d/CNVkit/model/with_ref/model_res"
 
 #POOLED REF 
-out_dir="/mnt/d/CNVkit/model/with_pooledref/model_out"
-res_dir="/mnt/d/CNVkit/model/with_pooledref/model_res"
 out_dir="/mnt/d/CNVkit/model/with_pooledref_nodrop/model_out"
 res_dir="/mnt/d/CNVkit/model/with_pooledref_nodrop/model_res"
 
-# BLOOD CHECK 
-out_dir="/mnt/d/CNVkit/model/blood_check/model_out"
+
 
 # Log files
 error_log="failed_files.log"
@@ -90,9 +96,9 @@ process_bam() {
     local ref_dir="$2"
     local targets_dir="$3"
     local out_dir="$4"
+    local mode="$5" #with_pooledref with_flatref with_normal 
     
     sample_name=$(basename "$file" .bam)
-    #normal=${file/tum-001/blood}
     sample_out="${out_dir}/${sample_name}"
     
     # Skip if output directory already exists
@@ -100,44 +106,48 @@ process_bam() {
         echo "Creating directory ${sample_out}"
         mkdir -p "$sample_out"
         
-        #Run CNVkit batch with pooled reference
-        echo "Launching batch command for ${file}"
-            cnvkit.py batch "$file" \
-            -r "${targets_dir}/blood_pooled_reference.cnn" \
+        if [[ "$mode" == "with_pooledref" ]]; then 
+            #Run CNVkit batch with pooled reference
+            echo "Launching batch command for ${file} with ${targets_dir}/blood_pooled_reference.cnn"
+                cnvkit.py batch "$file" \
+                -r "${targets_dir}/blood_pooled_reference.cnn" \
+                --output-dir "$sample_out" \
+                --method hybrid \
+                -p $(nproc) \
+                --scatter 
+
+            echo "Success: wrote ${sample_out}/${sample_name}.cnn"
+
+        elif [[ "$mode" == "with_flatref" ]]; then 
+            #Run CNVkit batch with flat reference
+            echo "Launching batch command for ${file}"
+                cnvkit.py batch "$file" -r "${targets_dir}/flat_reference.cnn" \
+                --output-reference "${sample_out}/${sample_name}.cnn" \
+                --output-dir "$sample_out" \
+                -p $(nproc) \
+                --drop-low-coverage \
+                --scatter 
+
+            echo "Success: wrote ${sample_out}/${sample_name}.cnn"
+
+        elif [[ "$mode" == "with_normal" ]]; then 
+            #Run CNVkit batch with normal
+            normal=${file/tum-001/blood}
+            cnvkit.py batch "$file" -n "$normal" \
+            --fasta "${ref_dir}/hg38.fa" \
+            --targets "${targets_dir}/targets.bed" \
+            --antitargets "${targets_dir}/antitargets.bed" \
+            --annotate "${ref_dir}/refFlat.txt" \
             --output-dir "$sample_out" \
-            --method hybrid \
             -p $(nproc) \
-            --scatter 
+            --scatter
 
+            echo "Success: wrote ${sample_out}/${sample_name}.cnn"
 
-        #Run CNVkit batch with flat reference
-        # echo "Launching batch command for ${file}"
-        #     cnvkit.py batch "$file" -r "${targets_dir}/flat_reference.cnn" \
-        #     --output-reference "${sample_out}/${sample_name}.cnn" \
-        #     --output-dir "$sample_out" \
-        #     -p $(nproc) \
-        #     --drop-low-coverage \
-        #     --scatter 
-
-        #Run CNVkit batch with normal
-        #cnvkit.py batch "$file" -n "$normal" \
-        #
-        #--fasta "${ref_dir}/hg38.fa" \
-        #--targets "${targets_dir}/targets.bed" \
-        #--antitargets "${targets_dir}/antitargets.bed" \
-        #--annotate "${ref_dir}/refFlat.txt" \
-
-        echo "Success: wrote ${sample_out}/${sample_name}.cnn"
-        
-        #Add genemetrics after batch
-        cnr_file=$(find_sample_files "$sample_out" "$sample_name" "cnr")
-        if [ -f "$cnr_file" ]; then
-            echo "Running genemetrics for ${sample_name}"
-            cnvkit.py genemetrics "$cnr_file" -o "${sample_out}/${sample_name}.genemetrics.txt"
-            echo "Genemetrics completed for ${sample_name}"
-        fi
-
-        echo "Completed analysis for ${sample_name}"
+        else 
+            echo "mode not recognized, please type one of the following: [ with_pooledref, with_flatref, with_normal ]"
+        fi 
+            echo "Completed analysis for ${sample_name}"
     fi
 }
 
@@ -166,10 +176,10 @@ analyze_sample_results() {
             fi
             
             #Use correct vcf path depending on analysis 
-            if [ "$analysis_type"="model" ]; then
+            if [ "$analysis_type" = "model" ]; then
                 sample_prefix=$(basename "$sample_dir" | awk -F'-' '{print $1}')
                 vcf_path=$(find "${base_dir}" -type f \( -path "*${sample_prefix}*tum.hard-filtered.vcf*" \) -print -quit)
-            elif [ "$analysis_type"="tumor" ]; then
+            elif [ "$analysis_type" = "tumor" ]; then
                 vcf_path=$(find "${base_dir}" -type f \( -path "*${sample_name}.hard-filtered.vcf*" \) -print -quit)
             else 
                 echo "analysis_type not recognized, please select model or tumor." 
@@ -239,9 +249,10 @@ echo "Number of available cores: $num_cores"
 
 # Phase 2: BAM processing
 echo "=== PROCESSING BAM FILES ==="
-find "$base_dir" -type f -name "*tum-001.bam" ! -name "tmp*.bam" | while read file; do
+#find "$base_dir" -type f -name "*tum-001.bam" ! -name "tmp*.bam" | while read file; do
 #find "$base_dir" -type f -name "*blood.bam" ! -name "tmp*.bam" | while read file; do
-    process_bam "$file" "$ref_dir" "$targets_dir" "$out_dir"
+find "$base_dir" -type f -name "*2D-001.bam" ! -name "tmp*.bam" | while read file; do
+    process_bam "$file" "$ref_dir" "$targets_dir" "$out_dir" "with_pooledref"
 done
 
 # Phase 3: Results analysis
@@ -261,19 +272,4 @@ done
 # Phase 4: Multi-sample heatmap generation
 echo "=== GENERATING MULTI-SAMPLE HEATMAP ==="
 generate_multi_sample_heatmap "$out_dir" "$res_dir"
-
-#############################################################################################################
-# Esegui il 'call' anche per i campioni di sangue per vedere i copy number assoluti stimati
-# (assumendo ploidia 2 e purezza 1.0 per un "normale ideale")
-for sample_dir in "$out_dir"/*; do
-    sample_name=$(basename "$sample_dir")
-    cns_file=$(find_sample_files "$sample_dir" "$sample_name" "cns")
-    if [ -f "$cns_file" ]; then
-        cnvkit.py call "$cns_file" --ploidy 2 --purity 1.0 -o "${out_dir}/${sample_name}_flat_ref.call.cns"
-    else 
-        echo "cns not found for $sample_name" 
-    fi
-done
-
-
 
