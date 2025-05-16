@@ -24,7 +24,7 @@ def_model_dir_pooledref() {
     res_dir="/mnt/d/CNVkit/model/with_pooledref/model_res"
 }
 
-def_model_dir
+def_model_dir_pooledref
 
 out_dir="/mnt/d/CNVkit/model/without_ref/model_out"
 res_dir="/mnt/d/CNVkit/model/without_ref/model_res"
@@ -156,7 +156,7 @@ analyze_sample_results() {
     local sample_name="$1"
     local sample_dir="$2"
     local sample_res="$3"
-    local analysis_type="$4"
+    local vcf_pattern="$4"
     local vcf_missing_log="$5"
 
     # Skip if results directory already exists
@@ -175,19 +175,14 @@ analyze_sample_results() {
                 cnvkit.py breaks "$cnr_file" "$cns_file" --min-probes 5 > "$sample_res/${sample_name}_breaks.txt"
             fi
             
-            #Use correct vcf path depending on analysis 
-            if [ "$analysis_type" = "model" ]; then
-                sample_prefix=$(basename "$sample_dir" | awk -F'-' '{print $1}')
-                vcf_path=$(find "${base_dir}" -type f \( -path "*${sample_prefix}*tum.hard-filtered.vcf*" \) -print -quit)
-            elif [ "$analysis_type" = "tumor" ]; then
-                vcf_path=$(find "${base_dir}" -type f \( -path "*${sample_name}.hard-filtered.vcf*" \) -print -quit)
-            else 
-                echo "analysis_type not recognized, please select model or tumor." 
-            fi 
+            #Find vcf path based on pattern 
+            sample_prefix=$(basename "$sample_dir" | awk -F'-' '{print $1}')
+            vcf_path=$(find "${base_dir}" -type f \( -path "*${sample_prefix}*${vcf_pattern}*" \) -print -quit)
 
             # Call CNVs using VCF (if available)
             if [ -f "$vcf_path" ]; then
-                cnvkit.py call "$cns_file" --vcf "$vcf_path" --drop-low-coverage -o "$sample_res/${sample_name}_call.cns"
+                echo "Found ${vcf_path} for $sample_name, launching cnvkit.py call"
+                cnvkit.py call "$cns_file" --vcf "$vcf_path" -o "$sample_res/${sample_name}_call.cns"
             else
                 echo "VCF not found for $sample_name. Skipping call command."
                 echo "$sample_name" >> "$vcf_missing_log"
@@ -265,9 +260,11 @@ for sample_dir in "$out_dir"/*; do
     sample_name=$(basename "$sample_dir")
     sample_res="$res_dir/$sample_name"
     sample_list+=("$sample_name")
-    analyze_sample_results "$sample_name" "$sample_dir" "$sample_res" "model" "$vcf_missing_log" 
+    analyze_sample_results "$sample_name" "$sample_dir" "$sample_res" "tum.hard-filtered.vcf" "$vcf_missing_log" 
 done
 
+#"2D.hard-filtered.vcf"
+#"*${sample_name}.hard-filtered.vcf*"
 
 # Phase 4: Multi-sample heatmap generation
 echo "=== GENERATING MULTI-SAMPLE HEATMAP ==="

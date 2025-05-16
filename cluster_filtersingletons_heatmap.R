@@ -19,7 +19,7 @@ config <- list(
 
 # ---- Function to import call.cns files ----
 import_segments <- function() {
-  samples <- list.files(config$dirs$res, pattern = ".*-t.*$") %>% 
+  samples <- list.files(config$dirs$res, pattern = ".*-001.*$") %>% 
     setdiff(c("multi_sample", "nfr", "nfrmulti_sample"))
   
   message("Found samples: ", paste(samples, collapse = ", "))

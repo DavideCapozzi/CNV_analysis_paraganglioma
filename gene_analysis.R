@@ -9,21 +9,19 @@ library(writexl)
 
 config <- list(
   dirs = list(
-    base = "D:/CNVkit/tumor/PTJ_WES_IDT-30802789/",
-    out = "D:/CNVkit/tumor/tumor_imgs",
-    res = "D:/CNVkit/tumor/tumor_res/"
+    base = "D:/CNVkit/model/WES_modelli/",
+    out = "D:/CNVkit/model/with_pooledref/model_imgs/",
+    res = "D:/CNVkit/model/with_pooledref/model_res//"
   ) 
 )
 
 # =====================================================================
-# Funzione modificata per importare genemetrics CON BAF
-# Verifica struttura file genemetrics (CNVkit v0.9.11):
-# gene, chromosome, start, end, log2, depth, weight, probes, baf (se presente)
+# Function to import CNVkit files
 # =====================================================================
 import_cnvkit_files <- function(file_type, cols) {
   safely_read <- safely(read_tsv)
   
-  samples <- list.files(config$dirs$res, pattern = ".*-t.*$") %>% 
+  samples <- list.files(config$dirs$res, pattern = ".*2D-001.*$") %>% 
     setdiff(c("multi_sample", "nfr", "nfrmulti_sample"))
   
   map_dfr(samples, ~{
@@ -33,7 +31,7 @@ import_cnvkit_files <- function(file_type, cols) {
       return(NULL)
     }
     
-    # Verifica presenza colonna BAF
+    # Verify BAF column 
     header <- read_lines(file_path, n_max = 1) %>% str_split("\t") %>% unlist()
     if(! "baf" %in% tolower(header)) stop("Colonna 'baf' non trovata in ", file_path)
     
@@ -43,7 +41,7 @@ import_cnvkit_files <- function(file_type, cols) {
 }
 
 # =====================================================================
-# Importazione dati 
+# Import data
 # =====================================================================
 genes <- import_cnvkit_files("genemetrics.txt", cols = cols(
   gene = "c", chromosome = "c", start = "d", end = "d", 
@@ -51,43 +49,49 @@ genes <- import_cnvkit_files("genemetrics.txt", cols = cols(
 )) %>%
   #filter(!is.na(baf), is.numeric(baf)) %>%
   mutate(
-    # Correzione critica: rimuovi "chr" e converti in factor
-    chromosome = gsub("chr", "", chromosome),  # Rimuove "chr" dai valori
+    chromosome = gsub("chr", "", chromosome),  
     chr = factor(
       chromosome,
-      levels = c(1:22, "X", "Y"),  # Livelli corretti SENZA "chr"
-      labels = c(1:22, "X", "Y")   # Etichette esplicite (opzionale)
+      levels = c(1:22, "X", "Y"),  
+      labels = c(1:22, "X", "Y")   
     ),
     baf = if_else(baf > 0.5, 1 - baf, baf)
   ) %>%
-  filter(!is.na(chr))  # Rimuove eventuali cromosomi non validi (es. "M")
+  filter(!is.na(chr))  # Deletes non valid chromosomes 
 
-# Verifica iniziale
+# Initial check 
 if(nrow(genes) == 0) stop("Nessun dato dopo il filtraggio BAF! Verifica i file di input.")
 
 # =====================================================================
-# Identificazione geni chiave
+# Identify key genes 
 # =====================================================================
 
-top_altered_genes <- genes %>%
-  filter(abs(log2) > 0.7) %>%
-  mutate(gene = sub("_.*", "", gene)) %>%
-  group_by(gene) %>%
-  summarize(
-    frequency = n_distinct(sample_id),
-    # Determina il tipo di alterazione basandosi sulla mediana di log2
-    type = ifelse(median(log2, na.rm = TRUE) > 0, "AMP", "DEL"),
-    log2_median = median(log2, na.rm = TRUE),
-    cn_median = median(cn, na.rm = TRUE),
-    baf_median = median(baf, na.rm = TRUE)
-  ) %>%
-  arrange(desc(frequency))
+extract_top_altered_genes <- function(genes, log2_threshold = 0.7) {
+  top_altered_genes <- genes %>%
+    dplyr::filter(abs(log2) > log2_threshold) %>%
+    dplyr::mutate(gene = sub("_.*", "", gene)) %>%
+    dplyr::group_by(gene) %>%
+    dplyr::summarize(
+      frequency = dplyr::n_distinct(sample_id),
+      # Label alteration type (amplification, deletion) based on log2 sign 
+      type = ifelse(median(log2, na.rm = TRUE) > 0, "AMP", "DEL"),
+      log2_median = median(log2, na.rm = TRUE),
+      cn_median = median(cn, na.rm = TRUE),
+      baf_median = median(baf, na.rm = TRUE)
+    ) %>%
+    dplyr::arrange(dplyr::desc(frequency))
+  
+  return(top_altered_genes)
+}
 
-geni_annotati <- top_altered_genes %>%
+log2_threshold = 0.05
+top_altered_genes <- extract_top_altered_genes(genes, log2_threshold)
+
+annotated_genes <- top_altered_genes %>%
   filter(gene %in% keys(org.Hs.eg.db, keytype="SYMBOL"))
 
-output_file <- file.path(config$dirs$out, "geni_annotati.xlsx")
-writexl::write_xlsx(geni_annotati, path = output_file)
+output_file <- file.path(config$dirs$out, paste0("log2threshold_", as.character(log2_threshold), "_annotated_genes.xlsx"))
+writexl::write_xlsx(annotated_genes, path = output_file)
 
 # =====================================================================
 # Domanda Biologica 1: Le alterazioni copiche sono associate a perdita di eterozigosi (LOH)?
