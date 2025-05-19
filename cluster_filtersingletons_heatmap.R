@@ -10,10 +10,18 @@ library(RColorBrewer)
 library(dendextend)
 
 # ---- Centralized Configuration ----
+
 config <- list(
   dirs = list(
-    res = "D:/CNVkit/model/with_pooledref/model_res/",
-    out = "D:/CNVkit/model/with_pooledref/model_imgs/"
+    out = "D:/CNVkit/tumor/tumor_imgs/",
+    res = "D:/CNVkit/tumor/tumor_res/"
+  ) 
+)
+
+config <- list(
+  dirs = list(
+    res = "D:/CNVkit/model/with_pooledref/model_imgs/",
+    out = "D:/CNVkit/model/with_pooledref/model_res/"
   )
 )
 

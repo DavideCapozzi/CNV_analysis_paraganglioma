@@ -9,6 +9,14 @@ library(writexl)
 
 config <- list(
   dirs = list(
+    base = "D:/CNVkit/tumor/PTJ_WES_IDT-30802789/",
+    out = "D:/CNVkit/tumor/tumor_imgs/",
+    res = "D:/CNVkit/tumor/tumor_res/"
+  ) 
+)
+
+config <- list(
+  dirs = list(
     base = "D:/CNVkit/model/WES_modelli/",
     out = "D:/CNVkit/model/with_pooledref/model_imgs/",
     res = "D:/CNVkit/model/with_pooledref/model_res//"
@@ -84,7 +92,7 @@ extract_top_altered_genes <- function(genes, log2_threshold = 0.7) {
   return(top_altered_genes)
 }
 
-log2_threshold = 0.05
+log2_threshold = 0
 top_altered_genes <- extract_top_altered_genes(genes, log2_threshold)
 
 annotated_genes <- top_altered_genes %>%

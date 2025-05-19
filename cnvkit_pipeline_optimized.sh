@@ -9,10 +9,16 @@ in_dir="/mnt/d/CNVkit"
 ref_dir="/mnt/d/CNVkit/ref" #hg38, hg38-access, gnomAD, dgv, rmsk 
 
 #48 TUMOR SAMPLES
-base_dir="/mnt/d/CNVkit/tumor/PTJ_WES_IDT-30802789"
-targets_dir="/mnt/d/CNVkit/tumor/tumor_targets"
-out_dir="/mnt/d/CNVkit/tumor/tumor_out"
-res_dir="/mnt/d/CNVkit/tumor/tumor_res"
+def_tumor_dir() {
+    in_dir="/mnt/d/CNVkit"
+    ref_dir="/mnt/d/CNVkit/ref"
+    base_dir="/mnt/d/CNVkit/tumor/PTJ_WES_IDT-30802789"
+    targets_dir="/mnt/d/CNVkit/tumor/tumor_targets"
+    out_dir="/mnt/d/CNVkit/tumor/tumor_out"
+    res_dir="/mnt/d/CNVkit/tumor/tumor_res"
+}
+
+def_tumor_dir
 
 #8 MODEL SAMPLES
 def_model_dir_pooledref() {
@@ -260,11 +266,14 @@ for sample_dir in "$out_dir"/*; do
     sample_name=$(basename "$sample_dir")
     sample_res="$res_dir/$sample_name"
     sample_list+=("$sample_name")
-    analyze_sample_results "$sample_name" "$sample_dir" "$sample_res" "tum.hard-filtered.vcf" "$vcf_missing_log" 
+    analyze_sample_results "$sample_name" "$sample_dir" "$sample_res" ".hard-filtered.vcf" "$vcf_missing_log" 
 done
 
+#MODEL
+#"tum.hard-filtered.vcf"
 #"2D.hard-filtered.vcf"
-#"*${sample_name}.hard-filtered.vcf*"
+#48 TUMOR
+#".hard-filtered.vcf"
 
 # Phase 4: Multi-sample heatmap generation
 echo "=== GENERATING MULTI-SAMPLE HEATMAP ==="
