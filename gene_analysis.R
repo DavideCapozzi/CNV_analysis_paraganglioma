@@ -9,18 +9,20 @@ library(writexl)
 
 config <- list(
   dirs = list(
-    base = "D:/CNVkit/tumor/PTJ_WES_IDT-30802789/",
-    out = "D:/CNVkit/tumor/tumor_imgs/",
-    res = "D:/CNVkit/tumor/tumor_res/"
-  ) 
+    base = "D:/CNVkit/tumor/PTJ_WES_IDT-30802789",
+    out = "D:/CNVkit/tumor/tumor_imgs",
+    res = "D:/CNVkit/tumor/SBALLATE_tumor_res"
+  ), 
+  dir_pattern = ".*-t.*$"
 )
 
 config <- list(
   dirs = list(
-    base = "D:/CNVkit/model/WES_modelli/",
-    out = "D:/CNVkit/model/with_pooledref/model_imgs/",
-    res = "D:/CNVkit/model/with_pooledref/model_res//"
-  ) 
+    base = "D:/CNVkit/model/WES_modelli",
+    out = "D:/CNVkit/model/with_pooledref/model_imgs",
+    res = "D:/CNVkit/model/with_pooledref/model_res"
+  ),
+  dir_pattern = ".*001.*$"
 )
 
 # =====================================================================
@@ -29,19 +31,20 @@ config <- list(
 import_cnvkit_files <- function(file_type, cols) {
   safely_read <- safely(read_tsv)
   
-  samples <- list.files(config$dirs$res, pattern = ".*2D-001.*$") %>% 
+  samples <- list.files(config$dirs$res, pattern = config$dir_pattern) %>% 
     setdiff(c("multi_sample", "nfr", "nfrmulti_sample"))
   
   map_dfr(samples, ~{
     file_path <- file.path(config$dirs$res, .x, paste0(.x, "_", file_type))
+    message("Importing sample: ", file_path)
     if(!file.exists(file_path)) {
-      message("File mancante: ", file_path)
+      message("Missing file: ", file_path)
       return(NULL)
     }
     
     # Verify BAF column 
-    header <- read_lines(file_path, n_max = 1) %>% str_split("\t") %>% unlist()
-    if(! "baf" %in% tolower(header)) stop("Colonna 'baf' non trovata in ", file_path)
+    #header <- read_lines(file_path, n_max = 1) %>% str_split("\t") %>% unlist()
+    #if(! "baf" %in% tolower(header)) stop("'baf' column not found in ", file_path)
     
     res <- safely_read(file_path, col_types = cols)$result
     if(!is.null(res)) mutate(res, sample_id = .x) else NULL
@@ -63,12 +66,12 @@ genes <- import_cnvkit_files("genemetrics.txt", cols = cols(
       levels = c(1:22, "X", "Y"),  
       labels = c(1:22, "X", "Y")   
     ),
-    baf = if_else(baf > 0.5, 1 - baf, baf)
+    #baf = if_else(baf > 0.5, 1 - baf, baf)
   ) %>%
   filter(!is.na(chr))  # Deletes non valid chromosomes 
 
 # Initial check 
-if(nrow(genes) == 0) stop("Nessun dato dopo il filtraggio BAF! Verifica i file di input.")
+if(nrow(genes) == 0) stop("No data available after filtering!")
 
 # =====================================================================
 # Identify key genes 
@@ -92,7 +95,7 @@ extract_top_altered_genes <- function(genes, log2_threshold = 0.7) {
   return(top_altered_genes)
 }
 
-log2_threshold = 0
+log2_threshold = 0.5
 top_altered_genes <- extract_top_altered_genes(genes, log2_threshold)
 
 annotated_genes <- top_altered_genes %>%

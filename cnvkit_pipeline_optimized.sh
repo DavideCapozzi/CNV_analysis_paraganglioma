@@ -275,6 +275,19 @@ done
 #48 TUMOR
 #".hard-filtered.vcf"
 
+#Calculate genemetrics on cnr 
+for sample_dir in "$out_dir"/*; do  
+    sample_name=$(basename "$sample_dir")
+    sample_res="$res_dir/$sample_name"
+    cnr_file=$(find_sample_files "$sample_dir" "$sample_name" "cnr")
+    if [[ -f "$sample_res/${sample_name}_CNR_genemetrics.txt" ]]; then
+        echo "$cnr_file already exists skipping"
+        continue 
+    else 
+        cnvkit.py genemetrics "$cnr_file" -o "$sample_res/${sample_name}_CNR_genemetrics.txt"
+    fi 
+done
+
 # Phase 4: Multi-sample heatmap generation
 echo "=== GENERATING MULTI-SAMPLE HEATMAP ==="
 generate_multi_sample_heatmap "$out_dir" "$res_dir"

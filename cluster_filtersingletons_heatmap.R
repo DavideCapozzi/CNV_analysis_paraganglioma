@@ -13,21 +13,25 @@ library(dendextend)
 
 config <- list(
   dirs = list(
-    out = "D:/CNVkit/tumor/tumor_imgs/",
-    res = "D:/CNVkit/tumor/tumor_res/"
-  ) 
+    base = "D:/CNVkit/tumor/PTJ_WES_IDT-30802789",
+    out = "D:/CNVkit/tumor/tumor_imgs",
+    res = "D:/CNVkit/tumor/SBALLATE_tumor_res"
+  ), 
+  dir_pattern = ".*-t.*$"
 )
 
 config <- list(
   dirs = list(
-    res = "D:/CNVkit/model/with_pooledref/model_imgs/",
-    out = "D:/CNVkit/model/with_pooledref/model_res/"
-  )
+    base = "D:/CNVkit/model/WES_modelli",
+    out = "D:/CNVkit/model/with_pooledref/model_imgs",
+    res = "D:/CNVkit/model/with_pooledref/model_res"
+  ),
+  dir_pattern = ".*001.*$"
 )
 
 # ---- Function to import call.cns files ----
 import_segments <- function() {
-  samples <- list.files(config$dirs$res, pattern = ".*-001.*$") %>% 
+  samples <- list.files(config$dirs$res, pattern = config$dir_pattern) %>% 
     setdiff(c("multi_sample", "nfr", "nfrmulti_sample"))
   
   message("Found samples: ", paste(samples, collapse = ", "))
