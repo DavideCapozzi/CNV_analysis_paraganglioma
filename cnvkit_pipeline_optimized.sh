@@ -32,17 +32,19 @@ def_model_dir_pooledref() {
 
 def_model_dir_pooledref
 
+def_model_dir_ref() {
+    in_dir="/mnt/d/CNVkit"
+    ref_dir="/mnt/d/CNVkit/ref"
+    base_dir="/mnt/d/CNVkit/model/WES_modelli"
+    targets_dir="/mnt/d/CNVkit/model/model_targets"
+    out_dir="/mnt/d/CNVkit/model/with_ref/model_out"
+    res_dir="/mnt/d/CNVkit/model/with_ref/model_res"
+}
+
+def_model_dir_ref
+
 out_dir="/mnt/d/CNVkit/model/without_ref/model_out"
 res_dir="/mnt/d/CNVkit/model/without_ref/model_res"
-
-out_dir="/mnt/d/CNVkit/model/with_ref/model_out"
-res_dir="/mnt/d/CNVkit/model/with_ref/model_res"
-
-#POOLED REF 
-out_dir="/mnt/d/CNVkit/model/with_pooledref_nodrop/model_out"
-res_dir="/mnt/d/CNVkit/model/with_pooledref_nodrop/model_res"
-
-
 
 # Log files
 error_log="failed_files.log"
@@ -102,7 +104,7 @@ process_bam() {
     local ref_dir="$2"
     local targets_dir="$3"
     local out_dir="$4"
-    local mode="$5" #with_pooledref with_flatref with_normal 
+    local mode="$5" #with_pooledref with_flatref with_ref
     
     sample_name=$(basename "$file" .bam)
     sample_out="${out_dir}/${sample_name}"
@@ -136,9 +138,10 @@ process_bam() {
 
             echo "Success: wrote ${sample_out}/${sample_name}.cnn"
 
-        elif [[ "$mode" == "with_normal" ]]; then 
+        elif [[ "$mode" == "with_ref" ]]; then 
             #Run CNVkit batch with normal
-            normal=${file/tum-001/blood}
+            #normal=${file/tum-001/blood}
+            normal=${file/2D-001/blood}
             cnvkit.py batch "$file" -n "$normal" \
             --fasta "${ref_dir}/hg38.fa" \
             --targets "${targets_dir}/targets.bed" \
@@ -151,7 +154,7 @@ process_bam() {
             echo "Success: wrote ${sample_out}/${sample_name}.cnn"
 
         else 
-            echo "mode not recognized, please type one of the following: [ with_pooledref, with_flatref, with_normal ]"
+            echo "mode not recognized, please type one of the following: [ with_pooledref, with_flatref, with_ref ]"
         fi 
             echo "Completed analysis for ${sample_name}"
     fi
@@ -254,7 +257,7 @@ echo "=== PROCESSING BAM FILES ==="
 #find "$base_dir" -type f -name "*tum-001.bam" ! -name "tmp*.bam" | while read file; do
 #find "$base_dir" -type f -name "*blood.bam" ! -name "tmp*.bam" | while read file; do
 find "$base_dir" -type f -name "*2D-001.bam" ! -name "tmp*.bam" | while read file; do
-    process_bam "$file" "$ref_dir" "$targets_dir" "$out_dir" "with_pooledref"
+    process_bam "$file" "$ref_dir" "$targets_dir" "$out_dir" "with_ref"
 done
 
 # Phase 3: Results analysis
