@@ -210,6 +210,7 @@ analyze_sample_results() {
 generate_multi_sample_heatmap() {
     local out_dir="$1"
     local res_dir="$2"
+    local cns_list="$3"
     
     echo "Generating multi-sample heatmap..."
     
@@ -217,24 +218,24 @@ generate_multi_sample_heatmap() {
     mkdir -p "${res_dir}/multi_sample"
     
     # Find all .cns files (batch output)
-    #find "$out_dir" -name "*.cns" ! -name "*call*" ! -name "*bintest*" > "${res_dir}/multi_sample/all_cns_files.txt"
+    #find "$out_dir" -name "*.cns" ! -name "*call*" ! -name "*bintest*" > "${res_dir}/multi_sample/cns_list.txt"
     
     # Generate heatmap for all samples from batch output
-    if [ -s "${res_dir}/multi_sample/all_cns_files.txt" ]; then
+    if [ -s "${cns_list}" ]; then
         echo "Generating heatmap for all samples from batch output..."
-        cnvkit.py heatmap $(cat "${res_dir}/multi_sample/all_cns_files.txt") -d \
+        cnvkit.py heatmap $(cat "${cns_list}") -d \
             -o "${res_dir}/multi_sample/all_samples_batch_heatmap.pdf"
         
         # Generate heatmaps for chromosomes relevant to paraganglioma
         # These chromosomes are verified to be compatible with hg38
         for chr in chr1 chr3 chr4 chr11 chr17 chr22; do
             echo "Generating heatmap for chromosome $chr..."
-            cnvkit.py heatmap $(cat "${res_dir}/multi_sample/all_cns_files.txt") -d \
+            cnvkit.py heatmap $(cat "${cns_list}") -d \
                 --chromosome $chr \
                 -o "${res_dir}/multi_sample/all_samples_${chr}_heatmap.pdf"
         done
     else 
-        echo "all_cns_files.txt not present in ${res_dir}/multi_sample/"
+        echo "cns_list file  not present in ${res_dir}/multi_sample/"
     fi
     
     echo "Multi-sample heatmap generation completed."
@@ -290,5 +291,5 @@ done
 
 # Phase 4: Multi-sample heatmap generation
 echo "=== GENERATING MULTI-SAMPLE HEATMAP ==="
-generate_multi_sample_heatmap "$out_dir" "$res_dir"
+generate_multi_sample_heatmap "$out_dir" "$res_dir" "${res_dir}/multi_sample/cns_list.txt"
 
