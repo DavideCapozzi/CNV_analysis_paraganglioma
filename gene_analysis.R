@@ -106,7 +106,7 @@ extract_top_altered_genes <- function(genes, log2_threshold = 0.7) {
   return(top_altered_genes)
 }
 
-log2_threshold = 0.3
+log2_threshold = 0.7
 new_top_altered_genes <- extract_top_altered_genes(genes, log2_threshold)
 
   #' Pulisce e normalizza i simboli dei geni da CNVKit genemetrics

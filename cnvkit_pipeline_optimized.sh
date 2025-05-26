@@ -43,6 +43,19 @@ def_model_dir_ref() {
 
 def_model_dir_ref
 
+def_model_dir_pooledref
+
+def_model_dir_tumor_ref() {
+    in_dir="/mnt/d/CNVkit"
+    ref_dir="/mnt/d/CNVkit/ref"
+    base_dir="/mnt/d/CNVkit/model/WES_modelli"
+    targets_dir="/mnt/d/CNVkit/model/model_targets"
+    out_dir="/mnt/d/CNVkit/model/with_tumor_ref/model_out"
+    res_dir="/mnt/d/CNVkit/model/with_tumor_ref/model_res"
+}
+
+def_model_dir_tumor_ref
+
 out_dir="/mnt/d/CNVkit/model/without_ref/model_out"
 res_dir="/mnt/d/CNVkit/model/without_ref/model_res"
 
@@ -128,7 +141,7 @@ process_bam() {
 
         elif [[ "$mode" == "with_flatref" ]]; then 
             #Run CNVkit batch with flat reference
-            echo "Launching batch command for ${file}"
+            echo "Launching batch command for ${file} with flat reference"
                 cnvkit.py batch "$file" -r "${targets_dir}/flat_reference.cnn" \
                 --output-reference "${sample_out}/${sample_name}.cnn" \
                 --output-dir "$sample_out" \
@@ -141,7 +154,9 @@ process_bam() {
         elif [[ "$mode" == "with_ref" ]]; then 
             #Run CNVkit batch with normal
             #normal=${file/tum-001/blood}
-            normal=${file/2D-001/blood}
+            #normal=${file/2D-001/blood}
+            normal=${file/2D-001/tum-001}
+            echo "Launching batch command for ${file} using ${normal} as reference"
             cnvkit.py batch "$file" -n "$normal" \
             --fasta "${ref_dir}/hg38.fa" \
             --targets "${targets_dir}/targets.bed" \
