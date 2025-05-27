@@ -56,8 +56,17 @@ def_model_dir_tumor_ref() {
 
 def_model_dir_tumor_ref
 
-out_dir="/mnt/d/CNVkit/model/without_ref/model_out"
-res_dir="/mnt/d/CNVkit/model/without_ref/model_res"
+def_model_dir_flatref() {
+    in_dir="/mnt/d/CNVkit"
+    ref_dir="/mnt/d/CNVkit/ref"
+    base_dir="/mnt/d/CNVkit/model/WES_modelli"
+    targets_dir="/mnt/d/CNVkit/model/model_targets"
+    out_dir="/mnt/d/CNVkit/model/with_flatref/model_out"
+    res_dir="/mnt/d/CNVkit/model/with_flatref/model_res"
+}
+
+def_model_dir_flatref
+
 
 # Log files
 error_log="failed_files.log"
@@ -235,9 +244,6 @@ generate_multi_sample_heatmap() {
     # Create directory for multi-sample output
     mkdir -p "${res_dir}/multi_sample"
     
-    # Find all .cns files (batch output)
-    #find "$out_dir" -name "*.cns" ! -name "*call*" ! -name "*bintest*" > "${res_dir}/multi_sample/cns_list.txt"
-    
     # Generate heatmap for all samples from batch output
     if [ -s "${cns_list}" ]; then
         echo "Generating heatmap for all samples from batch output..."
@@ -270,9 +276,9 @@ echo "Number of available cores: $num_cores"
 # Phase 2: BAM processing
 echo "=== PROCESSING BAM FILES ==="
 #find "$base_dir" -type f -name "*tum-001.bam" ! -name "tmp*.bam" | while read file; do
-#find "$base_dir" -type f -name "*blood.bam" ! -name "tmp*.bam" | while read file; do
-find "$base_dir" -type f -name "*2D-001.bam" ! -name "tmp*.bam" | while read file; do
-    process_bam "$file" "$ref_dir" "$targets_dir" "$out_dir" "with_ref"
+#find "$base_dir" -type f -name "*2D-001.bam" ! -name "tmp*.bam" | while read file; do
+find "$base_dir" -type f -name "*blood.bam" ! -name "tmp*.bam" | while read file; do
+    process_bam "$file" "$ref_dir" "$targets_dir" "$out_dir" "with_flatref"
 done
 
 # Phase 3: Results analysis
@@ -308,6 +314,25 @@ for sample_dir in "$out_dir"/*; do
 done
 
 # Phase 4: Multi-sample heatmap generation
+# Find all .cns files (batch output)
+find "$out_dir" -name "*.cns" ! -name "*call*" ! -name "*bintest*" > "${res_dir}/multi_sample/cns_list.txt"
+
 echo "=== GENERATING MULTI-SAMPLE HEATMAP ==="
-generate_multi_sample_heatmap "$out_dir" "$res_dir" "${res_dir}/multi_sample/cns_list.txt"
+generate_multi_sample_heatmap "$out_dir" "$res_dir" "${res_dir}/multi_sample/sorted_cns_list.txt"
+
+
+#Single sample heatmap 
+patients=$(ls "$out_dir" | cut -d'-' -f1 | sort -u)
+for patient in $patients; do
+    #mkdir -p "${res_dir}/single_sample/$patient"
+    
+    #find "$out_dir" -name "${patient}-*.cns" ! -name "*call*" ! -name "*bintest*" > "${res_dir}/single_sample/$patient/cns_list.txt"
+
+    generate_multi_sample_heatmap "$out_dir" "${res_dir}/single_sample/$patient" "${res_dir}/single_sample/$patient/cns_list.txt"
+done
+
+#sort by patient 
+awk -F'/' '{split($NF, a, "-"); print a[1] "\t" $0}' cns_list.txt | \
+sort -k1,1 -k2,2 | \
+cut -f2- > sorted_cns_list
 
